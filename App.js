@@ -13,6 +13,7 @@ export default function App() {
   const [capturedData, setCapturedData] = useState(null);
 
   const cameraRef = useRef(null);
+
   const isRunning = useRef(false);
 
   const toggleCamera = () => {
@@ -20,27 +21,44 @@ export default function App() {
   };
 
   const runDetectionLoop = async () => {
-    while (isRunning.current && cameraRef.current) {
-      try {
-        const photo = await cameraRef.current.takePictureAsync({
-          quality: 0.3,
-          skipProcessing: true,
-          shutterSound: false,
-        });
+    if (!cameraRef.current || !isRunning.current) return;
 
-        const result = await FaceDetector.detectFacesAsync(photo.uri, {
-          mode: FaceDetector.FaceDetectorMode.fast,
-          detectLandmarks: FaceDetector.FaceDetectorLandmarks.none,
-          runClassifications: FaceDetector.FaceDetectorClassifications.none,
-        });
+    try {
+      /**
+       * NOTE: expo-camera's takePictureAsync always writes a temporary file to disk
+       * even when requesting base64. expo-face-detector's detectFacesAsync also
+       * requires a file URI, not raw base64 data. 
+       * 
+       * For true 'memory-only' processing, consider switching to 
+       * react-native-vision-camera with a frame processor.
+       */
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 0.1,
+        skipProcessing: true,
+        shutterSound: false,
+        base64: true, // This stores the image data in a local variable (photo.base64)
+      });
 
-        if (isRunning.current) {
-          setFaceCount(result.faces.length);
-        }
+      if (!isRunning.current) return;
 
-        await new Promise(resolve => setTimeout(resolve, 200));
-      } catch (error) {
-        await new Promise(resolve => setTimeout(resolve, 200));
+      // We still use photo.uri here because detectFacesAsync requires a file path
+      const result = await FaceDetector.detectFacesAsync(photo.uri, {
+        mode: FaceDetector.FaceDetectorMode.fast,
+        detectLandmarks: FaceDetector.FaceDetectorLandmarks.none,
+        runClassifications: FaceDetector.FaceDetectorClassifications.none,
+      });
+
+      if (isRunning.current) {
+        setFaceCount(result.faces.length);
+        // You can now use photo.base64 if you need the image data in memory
+        // console.log('Base64 length:', photo.base64?.length);
+      }
+    } catch (error) {
+      // Ignore errors in the loop to keep it running
+    } finally {
+      if (isRunning.current) {
+        // Schedule next detection after a short delay
+        setTimeout(runDetectionLoop, 100);
       }
     }
   };
@@ -48,14 +66,15 @@ export default function App() {
   useEffect(() => {
     if (showCamera) {
       isRunning.current = true;
-      setTimeout(() => runDetectionLoop(), 500);
+      // Small delay to ensure camera is ready
+      const timer = setTimeout(() => runDetectionLoop(), 1000);
+      return () => {
+        isRunning.current = false;
+        clearTimeout(timer);
+      };
     } else {
       isRunning.current = false;
     }
-
-    return () => {
-      isRunning.current = false;
-    };
   }, [showCamera]);
 
   const openCamera = async () => {
@@ -94,15 +113,14 @@ export default function App() {
         faces: faceCount,
       });
     } catch (error) {
-      isRunning.current = true;
-      runDetectionLoop();
+      console.log('Error capturing photo:', error);
     }
   };
 
   const retakePhoto = () => {
     setCapturedData(null);
     isRunning.current = true;
-    setTimeout(() => runDetectionLoop(), 300);
+    setTimeout(runDetectionLoop, 500);
   };
 
   if (showCamera) {
@@ -177,15 +195,15 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <View style={styles.content}>
-        <Text style={styles.title}>Camera App</Text>
-        <Text style={styles.subtitle}>Tap the button to open camera</Text>
+        <View style={styles.content}>
+          <Text style={styles.title}>Camera App</Text>
+          <Text style={styles.subtitle}>Tap the button to open camera</Text>
 
-        <TouchableOpacity style={styles.cameraButton} onPress={openCamera}>
-          <Text style={styles.cameraButtonText}>Open Camera</Text>
-        </TouchableOpacity>
-      </View>
-      <StatusBar style="auto" />
+          <TouchableOpacity style={styles.cameraButton} onPress={openCamera}>
+            <Text style={styles.cameraButtonText}>Open Camera</Text>
+          </TouchableOpacity>
+        </View>
+        <StatusBar style="auto" />
       </SafeAreaView>
     </SafeAreaProvider>
   );
