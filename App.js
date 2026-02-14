@@ -196,8 +196,8 @@ export default function App() {
     <SafeAreaProvider>
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         <View style={styles.content}>
-          <Text style={styles.title}>Camera App</Text>
-          <Text style={styles.subtitle}>Tap the button to open camera</Text>
+          <Text style={styles.title}>Facail Detection</Text>
+          <Text style={styles.subtitle}>Start Recoginition</Text>
 
           <TouchableOpacity style={styles.cameraButton} onPress={openCamera}>
             <Text style={styles.cameraButtonText}>Open Camera</Text>
